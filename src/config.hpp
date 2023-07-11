@@ -2,25 +2,33 @@
 
 #ifndef CONFIG_HPP
 #define CONFIG_HPP
+#pragma once
+
+#include <VL53L0X.h>
+#include <SD.h>
+#include <WiFi.h>
+#include <NTPClient.h>
+#include <RTClib.h>
+#include <BluetoothSerial.h>
+#include <Arduino.h>
+#include <neotimer.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 // config NTP server for RTC WiFi calibration
 const char* ntpServer = "pool.ntp.org";
 
 // Wifi connection credentials
-const char* ssid = "CBPF_EVENTOS";
-const char* password = "cbpf2019";
+const char* ssid = "FUX_2G";//"CBPF_EVENTOS";
+const char* password = "fux081100";//"cbpf2019";
 
 // IFTTT information for writing data on Google Sheets
 const char* resource = "/trigger/Medidas_ESP32_LIDAR/with/key/ci6ljKlFCFmexcFFISDd41";
 const char* server = "maker.ifttt.com";
 
 // LIDAR config
-// Define the XSHUT pin numbers
-const int XSHUT_PIN_0 = 6;
-const int XSHUT_PIN_1 = 15;
-// Define the I2C addresses for the sensors
-const uint8_t ADDRESS_0 = 0x30;
-const uint8_t ADDRESS_1 = 0x31;
+bool isLidaron_0 = false;
+bool isLidaron_1 = false;
 
 // Neotimer send data interval
 const int defaultTimer = 900000;
@@ -46,7 +54,7 @@ float dev_1 = 0;
 double mean_1 = 0;
 
 float temperature = 0;
-double reading_0 = 0;
-double reading_1 = 0;
+uint16_t reading_0 = 0;
+uint16_t reading_1 = 0;
 
 #endif

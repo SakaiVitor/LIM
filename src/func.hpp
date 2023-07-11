@@ -2,13 +2,8 @@
 
 #ifndef FUNC_HPP
 #define FUNC_HPP
+#pragma once
 
-#include <iostream>
-#include <SD.h>
-#include <WiFi.h>
-#include <NTPClient.h>
-#include <RTClib.h>
-#include <BluetoothSerial.h>
 #include "config.hpp"
 
 void readFile(fs::FS &fs, const char * path, BluetoothSerial& SerialBT){
@@ -108,6 +103,7 @@ void closeWifiConnection() {
 }
 
 void makeIFTTTRequest(String data) {
+    initWifi();
     if(!isWifiConnected()){
         Serial.println("Failed to estabilish WiFi connection! Could NOT send data");
         return;
@@ -157,7 +153,7 @@ void makeIFTTTRequest(String data) {
 String adjustRTC(NTPClient& timeClient, RTC_DS1307& rtc){  
     isWifiConnected();
     if(WiFi.status() != WL_CONNECTED) {
-        Serial.println("Failed to connect, going back to sleep");
+        Serial.println("Failed to connect");
     }
     timeClient.begin();
     timeClient.setPoolServerName(ntpServer); // Set NTP server
@@ -186,64 +182,125 @@ void resetCounters(){
 
     logMeanCount = 0;
 }
-
-void initializeLidarSensors(VL53L0X sensor_0, VL53L0X sensor_1)
-{
-    // Initialize the XSHUT pins
+/*void initializeLidarSensors(VL53L0X sensor_0, VL53L0X sensor_1){
     pinMode(XSHUT_PIN_0, OUTPUT);
     pinMode(XSHUT_PIN_1, OUTPUT);
 
-    // Reset the sensors by setting XSHUT pins low
-    digitalWrite(XSHUT_PIN_0, LOW);
+    // all reset
+    digitalWrite(XSHUT_PIN_0, LOW);    
     digitalWrite(XSHUT_PIN_1, LOW);
     delay(10);
 
-    // Bring the sensors out of reset by setting XSHUT pins high
+    // all unreset
     digitalWrite(XSHUT_PIN_0, HIGH);
     digitalWrite(XSHUT_PIN_1, HIGH);
     delay(10);
 
-    // Keep sensor 0 awake and disable sensor 1
+    // activating LOX0 and resetting LOX1
     digitalWrite(XSHUT_PIN_1, LOW);
-    delay(10);
-    if(sensor_0.init()){
-    sensor_0.setAddress(ADDRESS_0);
-    Serial.println("Sensor 0 initialized correctly");
-    sensor_1.setMeasurementTimingBudget(200000);
-    }else Serial.println("Failed to detect and initialize sensor_0!");
 
-    // Wake up sensor 1
-    digitalWrite(XSHUT_PIN_1, HIGH);
-    if(sensor_1.init()){
-    Serial.println("Sensor 1 initialized correctly");
-    sensor_1.setMeasurementTimingBudget(200000);
-    }else Serial.println("Failed to detect and initialize sensor_1!");
+    // initing LOX1
+    if(!sensor_0.init()) {
+        Serial.println(F("Failed to boot VL53L0X_0"));
+     }else {
+        sensor_0.setAddress(ADDRESS_0);
+        Serial.println(F("VL53L0X_0 booted successfully"));
+        sensor_0.setMeasurementTimingBudget(200000);
+        isLidaron_0 = true;
+    }
     delay(10);
+
+    // activating LOX1
+    digitalWrite(XSHUT_PIN_1, HIGH);
+    delay(10);
+
+    //initing LOX1
+    if(!sensor_1.init()) {
+        Serial.println(F("Failed to boot VL53L0X_1"));
+    }else {
+        Serial.println(F("VL53L0X_1 booted successfully"));
+        sensor_1.setMeasurementTimingBudget(200000);
+        isLidaron_1 = true;
+    }
+}*/
+void initializeLidarSensors(VL53L0X sensor_0, VL53L0X sensor_1){
+    pinMode(17, OUTPUT);
+    pinMode(16, OUTPUT);
+
+    digitalWrite(16, LOW); 
+    digitalWrite(17, LOW);
+    
+    digitalWrite(17, HIGH);
+    digitalWrite(16, HIGH);
+    digitalWrite(17, LOW); 
+    
+    delay(10); 
+    sensor_1.setAddress(0x30); 
+    digitalWrite(17, HIGH); 
+
+    if (!sensor_0.init())
+    {
+        Serial.println("Failed to detect and initialize sensor_0!");
+    }else isLidaron_0 = true;
+        
+    if (!sensor_1.init())
+    {
+        Serial.println("Failed to detect and initialize sensor_1!");
+    }else isLidaron_1 = true;
+
+    if(isLidaron_0) sensor_0.setMeasurementTimingBudget(200000); sensor_0.setTimeout(500);
+    if(isLidaron_1) sensor_1.setMeasurementTimingBudget(200000); sensor_1.setTimeout(500);
 }
 
 void testWifi(){
+    Serial.println("Initializing Wifi test");
     initWifi();
     Serial.println("Wifi connection tested successfully");
     closeWifiConnection();
 }
 
 void initializeSDCardAndRTC(NTPClient& timeClient, RTC_DS1307& rtc) {
-  if (!SD.begin()) {
-    Serial.println("Card Mount Failed");
-    while(1);
-  }
-  else {
-    Serial.println("SD Card Mounted");
-  }
+    if (!SD.begin()) {
+        Serial.println("Card Mount Failed");
+        while(1);
+    }
+    else {
+        Serial.println("SD Card Mounted");
+    }
 
-  if (!rtc.begin()) {
-    Serial.println("RTC not found");
-    while(1);
-  }
-  else {
-    Serial.println("RTC Connected");
-    adjustRTC(timeClient, rtc);
-  }
+    if (!rtc.begin()) {
+        Serial.println("RTC not found");
+        while(1);
+    }
+    else {
+        Serial.println("RTC Connected");
+    }
+}
+
+void i2cScan(){
+    
+    byte error, address;
+    int deviceCount = 0;
+
+    Serial.println("Scanning I2C bus...");
+
+    for (address = 1; address < 127; address++) {
+        Wire.beginTransmission(address);
+        error = Wire.endTransmission();
+
+        if (error == 0) {
+        Serial.print("Device found at address 0x");
+        if (address < 16)
+            Serial.print("0");
+        Serial.print(address, HEX);
+        Serial.println();
+
+        deviceCount++;
+        }
+    }
+
+    if (deviceCount == 0)
+        Serial.println("No devices found.");
 }
 
 
