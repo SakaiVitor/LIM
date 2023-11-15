@@ -8,14 +8,15 @@
 #include <neotimer.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <DHT_U.h>
+#include <Adafruit_Sensor.h>
+#include "DHT.h"
 
 // config NTP server for RTC WiFi calibration
-const char* ntpServer = "pool.ntp.org";
+const char* ntpServer = "a.st1.ntp.br";
 
 // Wifi connection credentials
-const char* ssid = "FUX_2G";//"CBPF_EVENTOS";
-const char* password = "fux081100";//"cbpf2019";
+const char* ssid = "CBPF_EVENTOS";//"CBPF_EVENTOS";
+const char* password = "cbpf2019";//"cbpf2019";
 
 // IFTTT information for writing data on Google Sheets
 const char* resource = "/trigger/Medidas_ESP32_LIDAR/with/key/ci6ljKlFCFmexcFFISDd41";
@@ -48,9 +49,13 @@ float deviationSum_1 = 0; // sum of standard deviation of measurements
 float dev_1 = 0;
 double mean_1 = 0;
 
+int firstTimeTrue = 1;
+
 float temperature = 0;
 uint16_t reading_0 = 0;
 uint16_t reading_1 = 0;
+
+DHT dht(0, DHT11);
 
 VL53L0X sensor_0;
 VL53L0X sensor_1;
@@ -58,9 +63,6 @@ RTC_DS1307 rtc;
 BluetoothSerial SerialBT;
 OneWire oneWire(4);
 DallasTemperature tempSensorBus(&oneWire);
-DHT_Unified dht(32, DHT11); 
-sensor_t sensor;
-sensors_event_t event;
 
 WiFiUDP udp;
 NTPClient timeClient(udp);
@@ -86,15 +88,16 @@ void i2cScan();
 
 void setup() {
     Serial.begin(115200);
-    SerialBT.begin("ESP32");
+    SerialBT.begin("ESP 32 2");
     Wire.begin();
     tempSensorBus.begin();
-    dht.begin();
     mytimer.set(defaultTimer);
     logtimer.set(200);
     initializeLidarSensors();
     testWifi();
     initializeSDCardAndRTC();
+    sensor_t sensor;
+    dht.begin();
 }
 
 void loop() {
@@ -106,6 +109,7 @@ void loop() {
             if (!logFile) {
                 mytimer.set(logInterval);
                 resetCounters();
+                firstTimeTrue = 1;
 
                 DateTime now = rtc.now();
                 String fileName = "/" + String(now.year()) + String(now.month()) + String(now.day()) + "_" + String(now.hour()) + String(now.minute()) + String(now.second()) + ".txt";
@@ -193,8 +197,8 @@ void loop() {
             while (!SerialBT.available());
             if (rtc.isrunning()) {
                 SerialBT.println("RTC adjusted!");
-                SerialBT.print("Current time: ");
-                SerialBT.print(adjustRTC());
+                SerialBT.println("Current time: ");
+                SerialBT.println(adjustRTC());
             }
         }
         else if (command == 'f') {
@@ -240,19 +244,20 @@ void loop() {
             String data1 = String(logEntryCount-1) + " " + String(reading_0) + " " + String(mean_0) + " " + String(stdev_0) + " " + String(reading_1) + " " + String(mean_1) + " " + String(stdev_1);
             String dataString = String(logEntryCount-1) + " " + String(millis() / 1000) + " " + String(now.day()) + "/" + String(now.month()) + "/" + String(now.year()) + " " + String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + " " + String(reading_0) + " " + String(reading_1);
             Serial.println(data1);
-            //logFile.println(dataString);
-            //logFile.flush();
+            logFile.println(data1);
+            logFile.flush();
         
             //SerialBT.println(dataString);
             //SerialBT.println(data1);
         }
-        } else if(mytimer.repeat()){
+        } else if(mytimer.repeat() || firstTimeTrue){
+        firstTimeTrue = 0;
+        float h = dht.readHumidity();
+        float t = dht.readTemperature();
         tempSensorBus.requestTemperatures(); 
         temperature = tempSensorBus.getTempCByIndex(0);
-        dht.temperature().getEvent(&event);
-        dht.humidity().getEvent(&event);
         logMeanCount++;
-        String dataN = String(logMeanCount) + " " + String(millis() / 1000) + " " + String(now.day()) + "/" + String(now.month()) + "/" + String(now.year()) + " " + String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + " " + String(mean_0) + " " + String(stdev_0) + " " + String(mean_1) + " " + String(stdev_1) + " " + String(temperature) + " " + String(event.temperature) + " " + String(event.relative_humidity);
+        String dataN = String(logMeanCount) + " " + String(millis() / 1000) + " " + String(now.day()) + "/" + String(now.month()) + "/" + String(now.year()) + " " + String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()) + " " + String(mean_0) + " " + String(stdev_0) + " " + String(mean_1) + " " + String(stdev_1) + " " + String(temperature) + " " + String(t) + " " + String(h);
         SerialBT.println(dataN);
         dataN.replace(".", ",");
         logFile.println(dataN);
@@ -418,9 +423,10 @@ void makeIFTTTRequest(String data) {
 }
 
 String adjustRTC(){  
-    isWifiConnected();
+    initWifi();
     if(WiFi.status() != WL_CONNECTED) {
-        Serial.println("Failed to connect");
+        //Serial.println("Failed to connect");
+        return "Failed to connect";
     }
     timeClient.begin();
     timeClient.setPoolServerName(ntpServer); // Set NTP server
@@ -431,7 +437,7 @@ String adjustRTC(){
     DateTime now = rtc.now();
     timeClient.end();
     closeWifiConnection();
-    return String(now.day()) + "/" + String(now.month()) + "/" + String(now.year()) + "_" + String(now.hour()) + String(now.minute()) + String(now.second());
+    return String(now.day()) + "/" + String(now.month()) + "/" + String(now.year()) + "_" + String(now.hour()) + String(now.minute()) + String(now.second()) + "\n";
 }
 
 void resetCounters(){
@@ -529,7 +535,7 @@ void testWifi(){
 void initializeSDCardAndRTC() {
     if (!SD.begin()) {
         Serial.println("Card Mount Failed");
-        while(1);
+        //return;
     }
     else {
         Serial.println("SD Card Mounted");
@@ -537,7 +543,7 @@ void initializeSDCardAndRTC() {
 
     if (!rtc.begin()) {
         Serial.println("RTC not found");
-        while(1);
+       // return;
     }
     else {
         Serial.println("RTC Connected");
